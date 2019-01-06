@@ -1,0 +1,15 @@
+---
+title: "Lavaan-Demo"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+d = read.table("http://www.stanford.edu/class/psych253/data/comt-covar7.txt", sep = "\t")
+
+d
+```
+

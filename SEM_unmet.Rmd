@@ -1,0 +1,466 @@
+---
+title: "SEM"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+###Libraries###
+library(haven)
+library(tidyverse)
+library(readxl)
+library(forcats)
+library(lavaan)
+library(qgraph)
+```
+
+```{r}
+###Data import###
+elders=haven::read_sas("Project/file_180426/elders_180426.sas7bdat",catalog_file="Project/file_180426/formats.sas7bcat",encoding="latin1")
+
+##Conversion en factor
+#Lecture du fichier d'annotation
+annot=read_excel("Project/file_180426/Variable_Dataset_cleaned.xlsx")
+```
+
+```{r}
+###Conversion en factor et definition des niveaux de reference###
+
+modeldata=elders %>% 
+  mutate(age_classe=droplevels(as_factor(age_classe))) %>% 
+  mutate(etude_c=droplevels(as_factor(etude_c))) %>% 
+  mutate(revucinsee_c=droplevels(as_factor(revucinsee_c))) %>% 
+  mutate(CC=droplevels(as_factor(CC)))%>% 
+  mutate(risque_c=droplevels(as_factor(risque_c))) %>% 
+  mutate(alcool_c=droplevels(haven::as_factor(alcool_c))) %>% 
+  mutate(COUPLE_c=droplevels(as_factor(COUPLE_c))) %>% 
+  mutate(difpayer_c=droplevels(as_factor(difpayer_c))) %>% 
+  mutate(fum_cat=droplevels(as_factor(fum_cat))) %>% 
+  mutate(TPS_c=droplevels(as_factor(TPS_c))) %>% 
+  mutate(etasante_g=droplevels(as_factor(etasante_g))) %>% 
+  mutate(RENONC_FLG=droplevels(as_factor(RENONC_FLG))) %>% 
+  mutate(homme=droplevels(as_factor(homme))) %>% 
+  mutate(etasante_g=forcats::fct_recode(etasante_g,
+                               "Mauvais/Moyen"="Tres mauvais",
+                               "Mauvais/Moyen"="Mauvais",
+                               "Mauvais/Moyen"="Assez Bon",
+                               "Bon/Tres bon"="Bon",
+                               "Bon/Tres bon"="Tres bon")) %>% 
+  mutate(age_classe=forcats::fct_recode(age_classe,
+                               "65-69"="65-69",
+                               "70-74"="70-74",
+                               "75-79"="75-79",
+                               "80-84"="80-84",
+                               "85+"="85-89",
+                               "85+"="90+")) %>%
+  mutate(etasante_g=relevel(etasante_g,ref="Bon/Tres bon")) %>% 
+  mutate(RENONC_FLG=relevel(RENONC_FLG,ref="Non")) %>% 
+  mutate(difpayer_c=relevel(difpayer_c,ref="Non")) %>% 
+    mutate(COUPLE_c=relevel(COUPLE_c,ref="Non")) %>% 
+  mutate(renonc_gen=droplevels(as_factor(renonc_gen))) %>% 
+  mutate(renonc_gen=relevel(renonc_gen,ref="Non")) %>% 
+  mutate(renonc_gp=droplevels(as_factor(renonc_gp))) %>% 
+  mutate(renonc_gp=relevel(renonc_gp,ref="Non")) %>% 
+  mutate(renonc_spe=droplevels(as_factor(renonc_spe))) %>% 
+  mutate(renonc_spe=relevel(renonc_spe,ref="Non")) %>% 
+  mutate(risque_c=relevel(risque_c,ref="Prise de risque")) %>% 
+  mutate(fragilite_code=factor(ifelse(fragilite>=3,1,0))) %>% 
+  mutate(etatsante_factor=factor(etasante_x)) %>% 
+  mutate(fum_cat=relevel(fum_cat,ref="Ne fume pas")) %>% 
+  mutate(CMU_x=droplevels(as_factor(CMU_x))) %>% 
+  mutate(CMU_x=relevel(CMU_x,ref="Non")) %>% 
+  mutate(CC_x=droplevels(as_factor(CC_x))) %>% 
+  mutate(CC_x=relevel(CC_x,ref="Non")) %>% 
+  mutate(CSP_cat=droplevels(as_factor(CSP_cat))) %>% 
+  mutate(ISOLEMENT_c=droplevels(as_factor(ISOLEMENT_c))) %>% 
+  mutate(ISOLEMENT_c=relevel(ISOLEMENT_c,ref="Non")) %>% 
+  mutate(renonc_flg_all=droplevels(as_factor(renonc_flg_all))) %>% 
+  mutate(renonc_flg_all=relevel(renonc_flg_all,ref="Non")) %>% 
+  mutate(fragilite_cat=droplevels(as_factor(fragilite))) %>% 
+  mutate(fragilite_cat=forcats::fct_recode(fragilite_cat,
+                                           "Robuste"="0",
+                                           "Pre-fragilite"="1",
+                                           "Pre-fragilite"="2",
+                                           "Fragilite"="3",
+                                           "Fragilite"="4",
+                                           "Fragilite"="5")) %>% 
+  mutate(alcool_num=as.numeric(alcool_c)) %>% 
+  mutate(alcool_cat=factor(alcool_num,
+                              labels=c("Jamais","1 fois par mois ou moins",
+                                       "2 a 4 fois par mois"))) %>% 
+  mutate(TPSAMI_x=droplevels(as_factor(TPSAMI_c))) %>% 
+  mutate(TPSASSO_x=droplevels(as_factor(TPSASSO_c))) %>% 
+  mutate(TPSFAMIL_x=droplevels(as_factor(TPSFAMIL_c))) %>% 
+  mutate(TPS=ifelse(TPSAMI_x %in% c("Tous les jours ou presque","Au moins une fois par semaine") |
+                              TPSASSO_x %in% c("Tous les jours ou presque","Au moins une fois par semaine") |
+                                                        TPSFAMIL_x %in% c("Tous les jours ou presque","Au moins une fois par semaine"),3,ifelse(TPSASSO_x %in% c("Au moins une fois par mois","Moins d'une fois par mois") |
+                              TPSAMI_x %in% c("Au moins une fois par mois","Moins d'une fois par mois") |
+                                                        TPSFAMIL_x %in% c("Au moins une fois par mois","Moins d'une fois par mois"),2,1))) %>% 
+  mutate(TPS=factor(TPS,labels=c("Jamais","Moyen","Beaucoup"))) %>% 
+  mutate(taille_ville=as_factor(taille_ville)) %>% 
+  mutate(taille_ville=relevel(taille_ville,ref="Tres grande")) %>% 
+  mutate(taille_ville2=as_factor(taille_ville2)) %>% 
+  mutate(taille_ville2=relevel(taille_ville2,ref="Grande")) %>% 
+  mutate(pole=as_factor(pole)) %>% 
+  mutate(pole=relevel(pole,ref="Grand pole")) %>% 
+  mutate(verre=as_factor(verre)) %>% 
+  mutate(verre=relevel(verre,ref="Jamais")) %>% 
+  mutate(verre=fct_recode(verre,
+                          "Jamais"="Jamais",
+                          "1 verre ou plus"="1 verre",
+                          "1 verre ou plus"="Plus d'un verre")) %>% 
+  mutate(TPS=relevel(TPS,ref="Beaucoup")) %>% 
+  mutate(social=as_factor(social)) %>% 
+  mutate(PBPATHOL_classe=factor(ifelse(PB_PATHOL<=1,1,2),labels=c("1 au plus","Plus de 1"))) %>% 
+  mutate(AVENIR_classe=factor(ifelse(AVENIR<=6,1,2),labels=c("Peu preoccupe","Preoccupe"))) %>% 
+  mutate(RISQUE_classe=factor(ifelse(RISQUE<=5,1,2),labels=c("Prudent","Aventureux"))) %>% 
+  #Recodage de la variable pole
+  mutate(pole=fct_recode(pole,
+                         "Grand pole"="Grand pole",
+                         "Periurbain-Grand pole"="Periurbain",
+                         "Autre"="Rural",
+                         "Autre"="Moyen")) %>% 
+  mutate(social=fct_recode(social,
+                           "Pas"="Pas",
+                           "Oui"="Moyen",
+                           "Oui"="Beaucoup")) %>% 
+  mutate(CSP_cat=fct_recode(CSP_cat,
+                            "Ouvrier"="Ouvrier prive",
+                            "Ouvrier"="Ouvrier publique",
+                            "Cadre"="Cadre publique",
+                            "Cadre"="Cadre prive"))
+```
+
+```{r}
+#Suppression des observations avec des donnees manquantes
+modeldata_sg5=subset(modeldata,!is.na(etasante_g) & DEPAMB>0 & !is.na(age_classe)
+                     & !is.na(homme) & !is.na(etude_c) & !is.na(CMU_x)
+                     & !is.na(CC_x) & !is.na(CSP_cat) & !is.na(fum_cat) & !is.na(verre) &
+                       !is.na(difpayer_c) & !is.na(COUPLE_c) & !is.na(RISQUE_classe) &  !is.na(AVENIR_classe) & !is.na(age_classe) & !is.na(adl_limit) &  !is.na(TPS) &
+                       !is.na(PBPATHOL_classe))
+
+#Log des depenses
+modeldata_sg5=modeldata_sg5 %>%
+  mutate(LOGDEP=log(DEPAMB)) %>% 
+  filter(etasante_g!="0") %>% 
+  droplevels()
+
+```
+
+```{r}
+#Transformation in ordered factor
+data_lava=modeldata_sg5 %>% 
+  mutate(social=as.ordered(.$social)) %>% 
+  mutate(CSP_cat=as.ordered(.$CSP_cat)) %>% 
+  mutate(difpayer_c=as.ordered(.$difpayer_c)) %>% 
+  mutate(etude_c=as.ordered(.$etude_c)) %>% 
+  mutate(fragilite_cat=as.ordered(.$fragilite_cat)) %>% 
+  mutate(verre=as.ordered(.$verre)) %>% 
+  mutate(fum_cat=as.ordered(.$fum_cat)) %>% 
+  mutate(pole=as.ordered(.$pole)) %>% 
+    mutate(COUPLE_c=as.ordered(.$COUPLE_c)) %>% 
+    mutate(ISOLEMENT_c=as.ordered(.$ISOLEMENT_c)) %>% 
+    mutate(AVENIR_classe=as.ordered(.$AVENIR_classe)) %>% 
+    mutate(RISQUE_classe=as.ordered(.$RISQUE_classe)) %>% 
+    mutate(renonc_flg_all=as.ordered(.$renonc_flg_all)) %>% 
+    mutate(CC_x=as.ordered(.$CC_x)) %>% 
+    mutate(CMU_x=as.ordered(.$CMU_x)) %>% 
+    mutate(etasante_g=as.ordered(.$etasante_g)) %>% 
+    mutate(PBPATHOL_classe=as.ordered(.$PBPATHOL_classe))
+
+
+```
+
+```{r}
+testdata=modeldata_sg5 %>% 
+  mutate(soc_dummy=ifelse(social=="Oui",1,0)) %>% 
+  mutate(couple_dummy=ifelse(COUPLE_c=="Oui",1,0)) %>% 
+  mutate(isolement_dummy=ifelse(ISOLEMENT_c=="Oui",1,0)) %>% 
+  mutate(etatsante_dummy=ifelse(etasante_g=="Mauvais/Moyen",1,0)) %>% 
+  mutate(adl1_dummy=ifelse(adl_limit>=1 & adl_limit<3,1,0)) %>% 
+  mutate(adl2_dummy=ifelse(adl_limit>=3,1,0)) %>% 
+  mutate(frag1_dummy=ifelse(fragilite_cat=="Pre-fragilite",1,0)) %>% 
+  mutate(frag2_dummy=ifelse(fragilite_cat=="Fragilite",1,0)) %>% 
+  mutate(pbpathol_dummy=ifelse(PBPATHOL_classe=="Plus de 1",1,0)) %>% 
+  mutate(verre2_dummy=ifelse(verre=="1 verre ou plus",1,0)) %>% 
+  mutate(csp1_dummy=ifelse(CSP_cat=="Cadre",1,0)) %>% 
+  mutate(csp2_dummy=ifelse(CSP_cat=="Independant",1,0)) %>% 
+  mutate(csp3_dummy=ifelse(CSP_cat=="Inactif",1,0)) %>% 
+  mutate(difpayer_dummy=ifelse(difpayer_c %in% c("Oui (Tres)","Oui"),1,0)) %>% 
+  mutate(etude1_dummy=ifelse(etude_c=="Secondaire",1,0)) %>% 
+  mutate(etude2_dummy=ifelse(etude_c=="Superieure",1,0)) %>% 
+  mutate(fum1_dummy=ifelse(fum_cat=="Moins de 10 cigarettes",1,0)) %>% 
+  mutate(fum2_dummy=ifelse(fum_cat=="Plus de 10 cigarettes",1,0)) %>% 
+  mutate(fum3_dummy=ifelse(fum_cat=="A arrete de fumer",1,0)) %>% 
+  mutate(pole1_dummy=ifelse(pole=="Periurbain-Grand pole",1,0)) %>% 
+  mutate(pole2_dummy=ifelse(pole=="Autre",1,0)) %>% 
+  mutate(avenir_dummy=ifelse(AVENIR_classe=="Preoccupe",1,0)) %>% 
+  mutate(risque_dummy=ifelse(RISQUE_classe=="Aventureux",1,0)) %>% 
+  mutate(renonc_dummy=ifelse(renonc_flg_all=="Oui",1,0)) %>% 
+  mutate(cc_dummy=ifelse(CC_x=="Oui",1,0)) %>% 
+  mutate(cmu_dummy=ifelse(CMU_x=="Oui",1,0)) %>%
+  mutate(homme_dummy=ifelse(homme=="Homme",1,0)) %>% 
+  mutate(age1_dummy=ifelse(age_classe=="70-74",1,0)) %>% 
+  mutate(age2_dummy=ifelse(age_classe=="75-79",1,0)) %>% 
+  mutate(age3_dummy=ifelse(age_classe=="80-84",1,0)) %>% 
+  mutate(age4_dummy=ifelse(age_classe=="85+",1,0)) %>% 
+  mutate(csp1_dummy2=ifelse(CSP_cat %in% c("Cadre","Independant"),1,0)) %>% 
+  mutate(csp2_dummy2=ifelse(CSP_cat=="Inactif",1,0)) %>% 
+  mutate(verre_dummy2=ifelse(verre=="Jamais",1,0)) %>% 
+  mutate(fum_dummy2=ifelse(fum_cat %in% c("Plus de 10 cigarettes"),1,0)) %>% 
+  mutate(renonc_dent_dummy=ifelse(RENONC_DENT_c==1,1,0)) %>% 
+  mutate(renonc_lunet_dummy=ifelse(RENONC_LUNET_c==1,1,0)) %>% 
+  mutate(renonc_cons_dummy=ifelse(RENONC_CONS_c==1,1,0)) %>% 
+  mutate(renonc_fin_dummy=ifelse(RENONC_FIN_c==1,1,0)) %>% 
+  mutate(renonc_long_dummy=ifelse(RENONC_LONG_c==1,1,0)) %>% 
+  mutate(renonc_loin_dummy=ifelse(RENONC_LOIN_c==1,1,0))
+
+ 
+
+
+
+  
+```
+
+
+```{r}
+#Sante 1
+model2 <- '
+  # measurement model
+    sante=~etatsante_dummy+adl1_dummy+adl2_dummy+frag1_dummy+frag2_dummy+pbpathol_dummy+age1_dummy+age2_dummy
++age3_dummy+age4_dummy
+adl2_dummy ~~ frag1_dummy
+frag1_dummy ~~ frag2_dummy
+'
+
+
+#fit your SEM
+fit <- cfa(model2, data = testdata,ordered=c("etatsante_dummy","adl1_dummy",
+                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy","verre1_dummy",
+                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","difpayer_dummy",
+                     "etude1_dummy","etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
+                     "pole1_dummy","pole2_dummy","avenir_dummy","risque_dummy",
+                     "renonc_dummy","cc_dummy","cmu_dummy","homme_dummy","age1_dummy",
+                     "age2_dummy","age3_dummy","age4_dummy","renonc_dummy"))
+
+summary(fit, fit.measures=TRUE, standardized=TRUE)
+
+modindices(fit)
+```
+
+```{r}
+#Sante 2
+model2 <- '
+  # measurement model
+    sante=~etatsante_dummy+adl1_dummy+adl2_dummy+frag1_dummy+frag2_dummy+pbpathol_dummy+age1_dummy+age2_dummy
+  # residual correlations
+  adl2_dummy ~~ frag1_dummy
+  adl2_dummy ~~ frag2_dummy
+frag1_dummy ~~    frag2_dummy
+
+'
+
+
+#fit your SEM
+fit <- cfa(model2, data = testdata,ordered=c("etatsante_dummy","adl1_dummy",
+                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy","verre1_dummy",
+                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","difpayer_dummy",
+                     "etude1_dummy","etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
+                     "pole1_dummy","pole2_dummy","avenir_dummy","risque_dummy",
+                     "renonc_dummy","cc_dummy","cmu_dummy","homme_dummy","age1_dummy",
+                     "age2_dummy","age3_dummy","age4_dummy","renonc_dummy"))
+
+summary(fit, fit.measures=TRUE, standardized=TRUE)
+
+modindices(fit)
+```
+
+```{r}
+#Hygiene de vie
+model2 <- '
+  # measurement model
+    hygiene =~ couple_dummy + isolement_dummy + soc_dummy + verre_dummy2+fum_dummy2
+'
+
+
+#fit your SEM
+fit <- cfa(model2, data = testdata,ordered=c("etatsante_dummy","adl1_dummy",
+                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy","verre1_dummy",
+                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","difpayer_dummy",
+                     "etude1_dummy","etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
+                     "pole1_dummy","pole2_dummy","avenir_dummy","risque_dummy",
+                     "renonc_dummy","cc_dummy","cmu_dummy","homme_dummy","age1_dummy",
+                     "age2_dummy","age3_dummy","age4_dummy","renonc_dummy","fum_dummy2","verre_dummy2"))
+
+summary(fit, fit.measures=TRUE, standardized=TRUE)
+
+modindices(fit)
+```
+
+```{r}
+#Couverture sociale
+##cmu peu d'observations
+model2 <- '
+  # measurement model
+    couverture=~ cc_dummy+cmu_dummy+difpayer_dummy
+'
+
+
+#fit your SEM
+fit <- cfa(model2, data = testdata,ordered=c("etatsante_dummy","adl1_dummy",
+                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy","verre1_dummy",
+                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","difpayer_dummy",
+                     "etude1_dummy","etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
+                     "pole1_dummy","pole2_dummy","avenir_dummy","risque_dummy",
+                     "renonc_dummy","cc_dummy","cmu_dummy","homme_dummy","age1_dummy",
+                     "age2_dummy","age3_dummy","age4_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2"))
+
+summary(fit, fit.measures=TRUE, standardized=TRUE)
+
+modindices(fit)
+```
+
+```{r}
+#Risque
+model2 <- '
+  # measurement model
+  risk=~risque_dummy+homme_dummy+etude1_dummy+etude2_dummy+avenir_dummy
+etude1_dummy ~~ etude2_dummy
+'
+
+
+#fit your SEM
+fit <- cfa(model2, data = testdata,ordered=c("etatsante_dummy","adl1_dummy",
+                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy","verre1_dummy",
+                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","difpayer_dummy",
+                     "etude1_dummy","etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
+                     "pole1_dummy","pole2_dummy","avenir_dummy","risque_dummy",
+                     "renonc_dummy","cc_dummy","cmu_dummy","homme_dummy","age1_dummy",
+                     "age2_dummy","age3_dummy","age4_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
+                     "verre_dummy2"))
+
+summary(fit, fit.measures=TRUE, standardized=TRUE)
+
+modindices(fit)
+```
+
+
+```{r}
+#Hygiene
+model2 <- '
+  # measurement model
+    hygiene=~ soc_dummy+couple_dummy+isolement_dummy+verre2_dummy+fum_dummy2
+'
+
+
+#fit your SEM
+fit <- cfa(model2, data = testdata,ordered=c("soc_dummy","isolement_dummy","couple_dummy","etatsante_dummy","adl1_dummy",
+                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
+                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","difpayer_dummy",
+                     "etude1_dummy","etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
+                     "pole1_dummy","pole2_dummy","avenir_dummy","risque_dummy",
+                     "renonc_dummy","cc_dummy","cmu_dummy","homme_dummy","age1_dummy",
+                     "age2_dummy","age3_dummy","age4_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
+                     "fum_dummy2"))
+
+summary(fit, fit.measures=TRUE, standardized=TRUE)
+
+modindices(fit)
+```
+
+```{r}
+#Renoncement
+model2 <- '
+  # measurement model
+    renonc=~ renonc_dent_dummy+renonc_lunet_dummy+renonc_cons_dummy+
+renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
+'
+
+
+#fit your SEM
+fit <- cfa(model2, data = testdata,ordered=c("soc_dummy","isolement_dummy","couple_dummy","etatsante_dummy","adl1_dummy",
+                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
+                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","difpayer_dummy",
+                     "etude1_dummy","etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
+                     "pole1_dummy","pole2_dummy","avenir_dummy","risque_dummy",
+                     "renonc_dummy","cc_dummy","cmu_dummy","homme_dummy","age1_dummy",
+                     "age2_dummy","age3_dummy","age4_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
+                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
+                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy"))
+
+summary(fit, fit.measures=TRUE, standardized=TRUE)
+
+modindices(fit)
+```
+
+```{r}
+#cfa
+model1 <- '
+  # measurement model
+    renonc=~ renonc_cons_dummy+
+    renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
+      sante=~etatsante_dummy+adl1_dummy+adl2_dummy+frag2_dummy+pbpathol_dummy
+
+   adl2_dummy ~~ frag2_dummy
+
+'
+
+#fit your SEM
+fit <- cfa(model1, data = testdata,ordered=c("soc_dummy","isolement_dummy","couple_dummy","etatsante_dummy","adl1_dummy",
+                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
+                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","cc_dummy",
+                     "etude1_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
+                     "avenir_dummy","risque_dummy",
+                     "renonc_dummy","cmu_dummy","homme_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
+                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
+                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy"))
+
+summary(fit, fit.measures=TRUE, standardized=TRUE)
+
+#modindices(fit)
+
+modificationIndices(fit, minimum.value = 10)
+
+inspect(fit)
+```
+
+
+```{r}
+#Test
+model1 <- '
+  # measurement model
+    renonc=~ renonc_dent_dummy+renonc_lunet_dummy+renonc_cons_dummy+
+    renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
+    risk=~risque_dummy+avenir_dummy+fum2_dummy
+      sante=~etatsante_dummy+adl1_dummy+adl2_dummy+frag2_dummy+pbpathol_dummy
+  # regression
+  sante~risk+age1_dummy+age2_dummy+age3_dummy+age4_dummy
+  renonc ~ sante+risk+cc_dummy+pole1_dummy+pole2_dummy+difpayer_dummy
+  LOGDEP ~ sante+renonc+cc_dummy+difpayer_dummy
+  risk~homme+etude2_dummy
+  cc_dummy~difpayer_dummy
+  # residual correlations
+  adl2_dummy ~~ frag2_dummy
+
+'
+
+#fit your SEM
+fit <- sem(model1, data = testdata,ordered=c("soc_dummy","isolement_dummy","couple_dummy","etatsante_dummy","adl1_dummy",
+                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
+                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","cc_dummy",
+                     "etude1_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
+                     "avenir_dummy","risque_dummy",
+                     "renonc_dummy","cmu_dummy","homme_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
+                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
+                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy"))
+
+summary(fit, fit.measures=TRUE, standardized=TRUE)
+
+modindices(fit)
+
+
+```
+

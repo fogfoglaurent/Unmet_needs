@@ -1,0 +1,34 @@
+---
+title: "SEM-Graph"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Import packages#
+library(DiagrammeR)
+```
+
+
+```{r}
+grViz("digraph DAG {
+
+graph [rankdir = LR bgcolor=transparent]
+
+node [shape = box, fontcolor=gray25 color=gray80]
+
+node [fontname='Helvetica']
+Age; Educ; Sex;
+
+node [fillcolor=gray90 style=filled]
+Cog_Fun Phys_Dis;
+
+edge [color=gray50 style=filled]
+Age -> Phys_Dis; Educ -> Phys_Dis; Sex -> Phys_Dis;
+Phys_Dis -> Cog_Fun;
+}")
+```
+

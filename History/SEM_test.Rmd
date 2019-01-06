@@ -1,0 +1,92 @@
+---
+title: "SEM test"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Investigate correlations
+```{r}
+par(mfrow=c(1, 1))
+PPMI<-read.csv("https://umich.instructure.com/files/330397/download?download_frd=1")
+summary(PPMI)
+```
+
+```{r,fig.height=7,fig.width=7}
+#Looking at correlations
+pp_heat <- PPMI[complete.cases(PPMI), -c(1, 20, 31)]
+corr_mat = cor(pp_heat)
+# Remove upper triangle
+corr_mat_lower = corr_mat
+corr_mat_lower[upper.tri(corr_mat_lower)] = NA
+
+# Melt correlation matrix and make sure order of factor variables is correct
+library(reshape2)
+library(ggplot2)
+corr_mat_melted = melt(corr_mat_lower)
+colnames(corr_mat_melted) <- c("Var1", "Var2", "value")
+corr_mat_melted$Var1 = factor(corr_mat_melted$Var1, levels=colnames(corr_mat))
+corr_mat_melted$Var2 = factor(corr_mat_melted$Var2, levels=colnames(corr_mat))
+# Plot
+corr_plot = ggplot(corr_mat_melted, aes(x=Var1, y=Var2, fill=value)) +
+  geom_tile(color='white') +
+  scale_fill_distiller(limits=c(-1, 1), palette='RdBu', na.value='white',
+                       name='Correlation') +
+  ggtitle('Correlations') +
+  coord_fixed(ratio=1) +
+  theme_minimal() +
+  scale_y_discrete(position="right") +
+  theme(axis.text.x=element_text(angle=90, vjust=1, hjust=1),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.grid.major=element_blank(),
+        legend.position=c(0.1,0.9),
+        legend.justification=c(0,1))
+corr_plot
+```
+
+```{r}
+#Manually check correlations
+cor(PPMI$L_insular_cortex_ComputeArea, PPMI$L_insular_cortex_Volume)
+
+cor(PPMI$UPDRS_part_I, PPMI$UPDRS_part_II, use = "complete.obs")
+```
+
+#Create latent variables
+
+```{r}
+model1<-
+  ' 
+    Imaging =~ L_cingulate_gyrus_ComputeArea  + L_cingulate_gyrus_Volume+R_cingulate_gyrus_ComputeArea+R_cingulate_gyrus_Volume+R_insular_cortex_ComputeArea+R_insular_cortex_Volume
+    UPDRS=~UPDRS_part_I+UPDRS_part_II+UPDRS_part_III
+    DemoGeno =~ Weight+Sex+Age
+
+    ResearchGroup ~ Imaging + DemoGeno + UPDRS
+'
+```
+
+```{r}
+#Shaping the data
+mydata<-scale(PPMI[, -c(1,20,31)]) # avoid scaling ID, Dx, Time
+mydata<-data.frame(PPMI$FID_IID, mydata, cbind(PPMI$time_visit, PPMI$ResearchGroup))
+colnames(mydata)[1]<-"FID_IID"
+colnames(mydata)[30]<-"time_visit"
+colnames(mydata)[31]<-"ResearchGroup"
+
+head(mydata)
+```
+
+#Fitting a model on the data
+
+```{r}
+# install.packages("lavaan")
+# install.packages("pbivnorm")
+library(lavaan)
+# lavaan requires all variables to be ordered
+# mydata[,] <- lapply(mydata[,], ordered)
+mydata$ResearchGroup <- as.ordered(mydata$ResearchGroup)
+fit<-cfa(model1, data=mydata, missing = 'FIML')
+```
+
