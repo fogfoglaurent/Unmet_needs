@@ -1,5 +1,5 @@
 ---
-title: "SEM"
+title: "SEM model for unmet needs and health care expenditures"
 output: html_document
 ---
 
@@ -13,17 +13,17 @@ library(haven)
 library(tidyverse)
 library(readxl)
 library(forcats)
-library(lavaan)
 library(qgraph)
+library(Hmisc)
 ```
 
 ```{r}
 ###Data import###
-elders=haven::read_sas("Project/file_180426/elders_180426.sas7bdat",catalog_file="Project/file_180426/formats.sas7bcat",encoding="latin1")
+elders=haven::read_sas("Data/elders_180426.sas7bdat",catalog_file="Data/formats.sas7bcat",encoding="latin1")
 
 ##Conversion en factor
 #Lecture du fichier d'annotation
-annot=read_excel("Project/file_180426/Variable_Dataset_cleaned.xlsx")
+annot=read_excel("Data/Variable_Dataset_cleaned.xlsx")
 ```
 
 ```{r}
@@ -131,16 +131,18 @@ modeldata=elders %>%
                             "Ouvrier"="Ouvrier prive",
                             "Ouvrier"="Ouvrier publique",
                             "Cadre"="Cadre publique",
-                            "Cadre"="Cadre prive"))
+                            "Cadre"="Cadre prive")) %>% 
+  mutate(etatsante_score=as.numeric(NOTE))
 ```
+
 
 ```{r}
 #Suppression des observations avec des donnees manquantes
-modeldata_sg5=subset(modeldata,!is.na(etasante_g) & DEPAMB>0 & !is.na(age_classe)
+modeldata_sg5=modeldata %>% filter(!is.na(etasante_g) & DEPAMB>0 & !is.na(age_classe)
                      & !is.na(homme) & !is.na(etude_c) & !is.na(CMU_x)
                      & !is.na(CC_x) & !is.na(CSP_cat) & !is.na(fum_cat) & !is.na(verre) &
                        !is.na(difpayer_c) & !is.na(COUPLE_c) & !is.na(RISQUE_classe) &  !is.na(AVENIR_classe) & !is.na(age_classe) & !is.na(adl_limit) &  !is.na(TPS) &
-                       !is.na(PBPATHOL_classe))
+                       !is.na(PBPATHOL_classe) & !is.na(etatsante_score))
 
 #Log des depenses
 modeldata_sg5=modeldata_sg5 %>%
@@ -150,29 +152,6 @@ modeldata_sg5=modeldata_sg5 %>%
 
 ```
 
-```{r}
-#Transformation in ordered factor
-data_lava=modeldata_sg5 %>% 
-  mutate(social=as.ordered(.$social)) %>% 
-  mutate(CSP_cat=as.ordered(.$CSP_cat)) %>% 
-  mutate(difpayer_c=as.ordered(.$difpayer_c)) %>% 
-  mutate(etude_c=as.ordered(.$etude_c)) %>% 
-  mutate(fragilite_cat=as.ordered(.$fragilite_cat)) %>% 
-  mutate(verre=as.ordered(.$verre)) %>% 
-  mutate(fum_cat=as.ordered(.$fum_cat)) %>% 
-  mutate(pole=as.ordered(.$pole)) %>% 
-    mutate(COUPLE_c=as.ordered(.$COUPLE_c)) %>% 
-    mutate(ISOLEMENT_c=as.ordered(.$ISOLEMENT_c)) %>% 
-    mutate(AVENIR_classe=as.ordered(.$AVENIR_classe)) %>% 
-    mutate(RISQUE_classe=as.ordered(.$RISQUE_classe)) %>% 
-    mutate(renonc_flg_all=as.ordered(.$renonc_flg_all)) %>% 
-    mutate(CC_x=as.ordered(.$CC_x)) %>% 
-    mutate(CMU_x=as.ordered(.$CMU_x)) %>% 
-    mutate(etasante_g=as.ordered(.$etasante_g)) %>% 
-    mutate(PBPATHOL_classe=as.ordered(.$PBPATHOL_classe))
-
-
-```
 
 ```{r}
 testdata=modeldata_sg5 %>% 
@@ -226,190 +205,56 @@ testdata=modeldata_sg5 %>%
 ```
 
 
-```{r}
-#Sante 1
-model2 <- '
-  # measurement model
-    sante=~etatsante_dummy+adl1_dummy+adl2_dummy+frag1_dummy+frag2_dummy+pbpathol_dummy+age1_dummy+age2_dummy
-+age3_dummy+age4_dummy
-adl2_dummy ~~ frag1_dummy
-frag1_dummy ~~ frag2_dummy
-'
+```{r,fig.height=12,fig.width=12}
+##Calculation of correlations between variables##
+
+#Liste des variables
+list_var=c("renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
+    "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy","risque_dummy",
+    "avenir_dummy","etatsante_dummy","adl1_dummy","adl2_dummy","frag1_dummy",
+    "frag2_dummy","pbpathol_dummy","age1_dummy","age2_dummy","age3_dummy","age4_dummy",
+    "cc_dummy","pole1_dummy","pole2_dummy","difpayer_dummy","homme_dummy","etude2_dummy","etatsante_score","soc_dummy","couple_dummy","isolement_dummy","verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","etude1_dummy",
+    "etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy","cmu_dummy")
+
+list_var=unique(sort(list_var))
 
 
-#fit your SEM
-fit <- cfa(model2, data = testdata,ordered=c("etatsante_dummy","adl1_dummy",
-                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy","verre1_dummy",
-                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","difpayer_dummy",
-                     "etude1_dummy","etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
-                     "pole1_dummy","pole2_dummy","avenir_dummy","risque_dummy",
-                     "renonc_dummy","cc_dummy","cmu_dummy","homme_dummy","age1_dummy",
-                     "age2_dummy","age3_dummy","age4_dummy","renonc_dummy"))
+#Liaison entre les variables explicatives
+library(questionr)
+cramer=matrix(NA,length(list_var),length(list_var))
+for (i in (1:length(list_var))){
+  for (j in (1:length(list_var)))
+  {
+    cramer[i,j]=cramer.v(table(testdata[[i]],testdata[[j]]))
+  }
+}
 
-summary(fit, fit.measures=TRUE, standardized=TRUE)
+colnames(cramer)=list_var
+rownames(cramer)=list_var
 
-modindices(fit)
+library(corrplot)
+old=par(no.readonly = TRUE)
+par(omi=c(0.4,0.4,0.4,0.4))
+corrplot(cramer,type="upper",tl.srt=45,tl.col="black",diag=F,addCoef.col="black",
+         addCoefasPercent=T)
+par(old)
+
 ```
 
 ```{r}
-#Sante 2
-model2 <- '
-  # measurement model
-    sante=~etatsante_dummy+adl1_dummy+adl2_dummy+frag1_dummy+frag2_dummy+pbpathol_dummy+age1_dummy+age2_dummy
-  # residual correlations
-  adl2_dummy ~~ frag1_dummy
-  adl2_dummy ~~ frag2_dummy
-frag1_dummy ~~    frag2_dummy
+#CFA
 
-'
+cfa.model1<-'
 
-
-#fit your SEM
-fit <- cfa(model2, data = testdata,ordered=c("etatsante_dummy","adl1_dummy",
-                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy","verre1_dummy",
-                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","difpayer_dummy",
-                     "etude1_dummy","etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
-                     "pole1_dummy","pole2_dummy","avenir_dummy","risque_dummy",
-                     "renonc_dummy","cc_dummy","cmu_dummy","homme_dummy","age1_dummy",
-                     "age2_dummy","age3_dummy","age4_dummy","renonc_dummy"))
-
-summary(fit, fit.measures=TRUE, standardized=TRUE)
-
-modindices(fit)
-```
-
-```{r}
-#Hygiene de vie
-model2 <- '
-  # measurement model
-    hygiene =~ couple_dummy + isolement_dummy + soc_dummy + verre_dummy2+fum_dummy2
-'
-
-
-#fit your SEM
-fit <- cfa(model2, data = testdata,ordered=c("etatsante_dummy","adl1_dummy",
-                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy","verre1_dummy",
-                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","difpayer_dummy",
-                     "etude1_dummy","etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
-                     "pole1_dummy","pole2_dummy","avenir_dummy","risque_dummy",
-                     "renonc_dummy","cc_dummy","cmu_dummy","homme_dummy","age1_dummy",
-                     "age2_dummy","age3_dummy","age4_dummy","renonc_dummy","fum_dummy2","verre_dummy2"))
-
-summary(fit, fit.measures=TRUE, standardized=TRUE)
-
-modindices(fit)
-```
-
-```{r}
-#Couverture sociale
-##cmu peu d'observations
-model2 <- '
-  # measurement model
-    couverture=~ cc_dummy+cmu_dummy+difpayer_dummy
-'
-
-
-#fit your SEM
-fit <- cfa(model2, data = testdata,ordered=c("etatsante_dummy","adl1_dummy",
-                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy","verre1_dummy",
-                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","difpayer_dummy",
-                     "etude1_dummy","etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
-                     "pole1_dummy","pole2_dummy","avenir_dummy","risque_dummy",
-                     "renonc_dummy","cc_dummy","cmu_dummy","homme_dummy","age1_dummy",
-                     "age2_dummy","age3_dummy","age4_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2"))
-
-summary(fit, fit.measures=TRUE, standardized=TRUE)
-
-modindices(fit)
-```
-
-```{r}
-#Risque
-model2 <- '
-  # measurement model
-  risk=~risque_dummy+homme_dummy+etude1_dummy+etude2_dummy+avenir_dummy
-etude1_dummy ~~ etude2_dummy
-'
-
-
-#fit your SEM
-fit <- cfa(model2, data = testdata,ordered=c("etatsante_dummy","adl1_dummy",
-                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy","verre1_dummy",
-                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","difpayer_dummy",
-                     "etude1_dummy","etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
-                     "pole1_dummy","pole2_dummy","avenir_dummy","risque_dummy",
-                     "renonc_dummy","cc_dummy","cmu_dummy","homme_dummy","age1_dummy",
-                     "age2_dummy","age3_dummy","age4_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
-                     "verre_dummy2"))
-
-summary(fit, fit.measures=TRUE, standardized=TRUE)
-
-modindices(fit)
-```
-
-
-```{r}
-#Hygiene
-model2 <- '
-  # measurement model
-    hygiene=~ soc_dummy+couple_dummy+isolement_dummy+verre2_dummy+fum_dummy2
-'
-
-
-#fit your SEM
-fit <- cfa(model2, data = testdata,ordered=c("soc_dummy","isolement_dummy","couple_dummy","etatsante_dummy","adl1_dummy",
-                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
-                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","difpayer_dummy",
-                     "etude1_dummy","etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
-                     "pole1_dummy","pole2_dummy","avenir_dummy","risque_dummy",
-                     "renonc_dummy","cc_dummy","cmu_dummy","homme_dummy","age1_dummy",
-                     "age2_dummy","age3_dummy","age4_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
-                     "fum_dummy2"))
-
-summary(fit, fit.measures=TRUE, standardized=TRUE)
-
-modindices(fit)
-```
-
-```{r}
-#Renoncement
-model2 <- '
-  # measurement model
-    renonc=~ renonc_dent_dummy+renonc_lunet_dummy+renonc_cons_dummy+
-renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
-'
-
-
-#fit your SEM
-fit <- cfa(model2, data = testdata,ordered=c("soc_dummy","isolement_dummy","couple_dummy","etatsante_dummy","adl1_dummy",
-                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
-                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","difpayer_dummy",
-                     "etude1_dummy","etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
-                     "pole1_dummy","pole2_dummy","avenir_dummy","risque_dummy",
-                     "renonc_dummy","cc_dummy","cmu_dummy","homme_dummy","age1_dummy",
-                     "age2_dummy","age3_dummy","age4_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
-                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
-                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy"))
-
-summary(fit, fit.measures=TRUE, standardized=TRUE)
-
-modindices(fit)
-```
-
-```{r}
-#cfa
-model1 <- '
-  # measurement model
-    renonc=~ renonc_cons_dummy+
+#measurement model
+renonc=~ renonc_dent_dummy+renonc_lunet_dummy+renonc_cons_dummy+
     renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
-      sante=~etatsante_dummy+adl1_dummy+adl2_dummy+frag2_dummy+pbpathol_dummy
-
-   adl2_dummy ~~ frag2_dummy
+sante=~etatsante_dummy+etatsante_score
+chronic=~adl1_dummy+adl2_dummy+pbpathol_dummy+frag1_dummy+frag2_dummy
 
 '
 
-#fit your SEM
-fit <- cfa(model1, data = testdata,ordered=c("soc_dummy","isolement_dummy","couple_dummy","etatsante_dummy","adl1_dummy",
+cfa1<-sem(cfa.model1,data=testdata,std.lv=T,ordered=c("soc_dummy","isolement_dummy","couple_dummy","etatsante_dummy","adl1_dummy",
                      "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
                      "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","cc_dummy",
                      "etude1_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
@@ -417,14 +262,39 @@ fit <- cfa(model1, data = testdata,ordered=c("soc_dummy","isolement_dummy","coup
                      "renonc_dummy","cmu_dummy","homme_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
                      "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
                      "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy"))
+summary(cfa1,fit.measures=TRUE, standardized=TRUE)
 
-summary(fit, fit.measures=TRUE, standardized=TRUE)
+inspect(cfa1,"std")
 
-#modindices(fit)
+mi = modificationIndices(cfa1)
+head(mi[order(-mi$mi), ], 10)
+```
 
-modificationIndices(fit, minimum.value = 10)
+```{r}
+#Model 2
+cfa.model2<-'
 
-inspect(fit)
+#measurement model
+renonc=~ renonc_cons_dummy+
+    renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
+sante=~etatsante_dummy+etatsante_score+pbpathol_dummy+frag2_dummy
+
+'
+
+cfa2<-sem(cfa.model2,data=testdata,std.lv=T,ordered=c("soc_dummy","isolement_dummy","couple_dummy","etatsante_dummy","adl1_dummy",
+                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
+                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","cc_dummy",
+                     "etude1_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
+                     "avenir_dummy","risque_dummy",
+                     "renonc_dummy","cmu_dummy","homme_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
+                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
+                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy"))
+summary(cfa2,fit.measures=TRUE, standardized=TRUE)
+
+inspect(cfa2,"std")
+
+mi = modificationIndices(cfa1)
+head(mi[order(-mi$mi), ], 10)
 ```
 
 
