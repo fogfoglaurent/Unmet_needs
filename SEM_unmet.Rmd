@@ -559,7 +559,7 @@ mi = modificationIndices(sem5)
 head(mi[order(-mi$mi), ], 10)
 ```
 
-```{r}
+```{r,fig.height=12,fig.width=12}
 #Model 6
 sem.model6<-'
 
@@ -592,6 +592,8 @@ sem6=sem(sem.model6,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dum
                      "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy","cc_dummy"))
 summary(sem6,fit.measures=TRUE, standardized=TRUE)
 
-semPaths(sem6)
+library(semPlot)
+semPaths(sem6, intercept = FALSE, whatLabel = "est",
+         residuals = FALSE, exoCov = FALSE)
 ```
 
