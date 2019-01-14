@@ -19,11 +19,11 @@ library(Hmisc)
 
 ```{r}
 ###Data import###
-elders=haven::read_sas("Data/elders_180426.sas7bdat",catalog_file="Data/formats.sas7bcat",encoding="latin1")
+elders=haven::read_sas("/Users/thomaslaurent/Documents/Cours-M2/Memoire/Project/file_180505/elders_180505.sas7bdat",catalog_file="//Users/thomaslaurent/Documents/Cours-M2/Memoire/Project/file_180505/formats.sas7bcat",encoding="latin1")
 
 ##Conversion en factor
 #Lecture du fichier d'annotation
-annot=read_excel("Data/Variable_Dataset_cleaned.xlsx")
+annot=read_excel("/Users/thomaslaurent/Documents/Cours-M2/Memoire/Project/file_180505/Variable_Dataset_cleaned.xlsx")
 ```
 
 ```{r}
@@ -48,7 +48,14 @@ modeldata=elders %>%
                                "Mauvais/Moyen"="Mauvais",
                                "Mauvais/Moyen"="Assez Bon",
                                "Bon/Tres bon"="Bon",
-                               "Bon/Tres bon"="Tres bon")) %>% 
+                               "Bon/Tres bon"="Tres bon")) %>%
+  mutate(age_classe2=forcats::fct_recode(age_classe,
+                               "80-"="65-69",
+                               "80-"="70-74",
+                               "80-"="75-79",
+                               "80+"="80-84",
+                               "80+"="85-89",
+                               "80+"="90+")) %>%
   mutate(age_classe=forcats::fct_recode(age_classe,
                                "65-69"="65-69",
                                "70-74"="70-74",
@@ -132,7 +139,8 @@ modeldata=elders %>%
                             "Ouvrier"="Ouvrier publique",
                             "Cadre"="Cadre publique",
                             "Cadre"="Cadre prive")) %>% 
-  mutate(etatsante_score=as.numeric(NOTE))
+  mutate(etatsante_score=as.numeric(NOTE)) %>% 
+  mutate(revenu_dummy=ifelse(revucinsee_c %in% c("1ere tranche","2eme tranche"),1,0))
 ```
 
 
@@ -158,7 +166,7 @@ testdata=modeldata_sg5 %>%
   mutate(soc_dummy=ifelse(social=="Oui",1,0)) %>% 
   mutate(couple_dummy=ifelse(COUPLE_c=="Oui",1,0)) %>% 
   mutate(isolement_dummy=ifelse(ISOLEMENT_c=="Oui",1,0)) %>% 
-  mutate(etatsante_dummy=ifelse(etasante_g=="Mauvais/Moyen",1,0)) %>% 
+  mutate(etatsante_dummy=ifelse(etasante_g=="Mauvais/Moyen",0,1)) %>% 
   mutate(adl1_dummy=ifelse(adl_limit>=1 & adl_limit<3,1,0)) %>% 
   mutate(adl2_dummy=ifelse(adl_limit>=3,1,0)) %>% 
   mutate(frag1_dummy=ifelse(fragilite_cat=="Pre-fragilite",1,0)) %>% 
@@ -195,7 +203,8 @@ testdata=modeldata_sg5 %>%
   mutate(renonc_cons_dummy=ifelse(RENONC_CONS_c==1,1,0)) %>% 
   mutate(renonc_fin_dummy=ifelse(RENONC_FIN_c==1,1,0)) %>% 
   mutate(renonc_long_dummy=ifelse(RENONC_LONG_c==1,1,0)) %>% 
-  mutate(renonc_loin_dummy=ifelse(RENONC_LOIN_c==1,1,0))
+  mutate(renonc_loin_dummy=ifelse(RENONC_LOIN_c==1,1,0)) %>% 
+  mutate(ageclass_dummy=ifelse(age_classe2=="80+",1,0))
 
  
 
@@ -244,125 +253,9 @@ par(old)
 ```{r}
 
 library(lavaan)
-#CFA
-
-cfa.model1<-'
-
-#measurement model
-renonc=~ renonc_dent_dummy+renonc_lunet_dummy+renonc_cons_dummy+
-    renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
-sante=~etatsante_dummy+etatsante_score
-chronic=~adl1_dummy+adl2_dummy+pbpathol_dummy+frag1_dummy+frag2_dummy
-
-'
-
-cfa1<-sem(cfa.model1,data=testdata,std.lv=T,ordered=c("soc_dummy","isolement_dummy","couple_dummy","etatsante_dummy","adl1_dummy",
-                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
-                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","cc_dummy",
-                     "etude1_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
-                     "avenir_dummy","risque_dummy",
-                     "renonc_dummy","cmu_dummy","homme_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
-                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
-                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy"))
-summary(cfa1,fit.measures=TRUE, standardized=TRUE)
-
-inspect(cfa1,"std")
-
-mi = modificationIndices(cfa1)
-head(mi[order(-mi$mi), ], 10)
-```
-
-```{r}
-#Model 2
-cfa.model2<-'
-
-#measurement model
-renonc=~ renonc_cons_dummy+
-    renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
-sante=~etatsante_dummy+etatsante_score+pbpathol_dummy+frag2_dummy
-
-'
-
-cfa2<-sem(cfa.model2,data=testdata,std.lv=T,ordered=c("soc_dummy","isolement_dummy","couple_dummy","etatsante_dummy","adl1_dummy",
-                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
-                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","cc_dummy",
-                     "etude1_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
-                     "avenir_dummy","risque_dummy",
-                     "renonc_dummy","cmu_dummy","homme_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
-                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
-                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy"))
-summary(cfa2,fit.measures=TRUE, standardized=TRUE)
-
-inspect(cfa2,"std")
-
-mi = modificationIndices(cfa2)
-head(mi[order(-mi$mi), ], 10)
-```
-
-```{r}
+#CFA model
 #Model 3
 cfa.model3<-'
-
-#measurement model
-renonc=~ renonc_cons_dummy+
-    renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
-sante=~etatsante_dummy+etatsante_score+pbpathol_dummy+frag2_dummy
-
-#correlations residuals
-etatsante_dummy~~etatsante_score
-
-'
-
-cfa2<-sem(cfa.model3,data=testdata,std.lv=T,ordered=c("soc_dummy","isolement_dummy","couple_dummy","etatsante_dummy","adl1_dummy",
-                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
-                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","cc_dummy",
-                     "etude1_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
-                     "avenir_dummy","risque_dummy",
-                     "renonc_dummy","cmu_dummy","homme_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
-                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
-                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy"))
-summary(cfa2,fit.measures=TRUE, standardized=TRUE)
-
-inspect(cfa2,"std")
-
-mi = modificationIndices(cfa2)
-head(mi[order(-mi$mi), ], 10)
-```
-
-```{r}
-#Model 4
-cfa.model4<-'
-
-#measurement model
-renonc=~ renonc_cons_dummy+
-    renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
-sante=~etatsante_dummy+etatsante_score+pbpathol_dummy+frag2_dummy
-
-#correlations residuals
-etatsante_dummy~~etatsante_score
-
-'
-
-cfa2<-sem(cfa.model4,data=testdata,std.lv=T,ordered=c("soc_dummy","isolement_dummy","couple_dummy","etatsante_dummy","adl1_dummy",
-                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
-                     "verre2_dummy","csp1_dummy","csp2_dummy","csp3_dummy","cc_dummy",
-                     "etude1_dummy","etude2_dummy","fum1_dummy","fum2_dummy","fum3_dummy",
-                     "avenir_dummy","risque_dummy",
-                     "renonc_dummy","cmu_dummy","homme_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
-                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
-                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy"))
-summary(cfa2,fit.measures=TRUE, standardized=TRUE)
-
-inspect(cfa2,"std")
-
-mi = modificationIndices(cfa2)
-head(mi[order(-mi$mi), ], 10)
-```
-
-```{r}
-#Regression model
-#Model 1
-sem.model1<-'
 
 #measurement model
 renonc=~ renonc_cons_dummy+
@@ -384,34 +277,30 @@ etatsante_dummy~~etatsante_score
 
 '
 
-cfa2<-sem(sem.model1,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dummy",
+cfa3<-sem(sem.model1,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dummy",
                      "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
                      "csp1_dummy","csp2_dummy","csp3_dummy",
                      "etude1_dummy",
                      "renonc_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
                      "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
                      "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy"))
-summary(cfa2,fit.measures=TRUE, standardized=TRUE)
-
-#inspect(cfa2,"std")
-
-#mi = modificationIndices(cfa2)
-#head(mi[order(-mi$mi), ], 10)
+summary(cfa3,fit.measures=TRUE, standardized=TRUE)
 ```
 
 ```{r}
-#Regression model
-#Model 2
-sem.model2<-'
+#CFA model
+#Model 4
+cfa.model4<-'
 
 #measurement model
 renonc=~ renonc_cons_dummy+
     renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
-sante=~etatsante_dummy+etatsante_score+pbpathol_dummy+frag2_dummy
+sante=~etatsante_dummy+etatsante_score+frag2_dummy
 
 #regression
-renonc~sante+etude2_dummy+risque_dummy+soc_dummy+fum2_dummy+verre2_dummy+avenir_dummy+isolement_dummy+difpayer_dummy
-sante~renonc+age1_dummy+age2_dummy+age3_dummy+age4_dummy+homme_dummy+etude2_dummy
+#renonc~sante+pole1_dummy+pole2_dummy+etude2_dummy+cmu_dummy+cc_dummy+couple_dummy+risque_dummy+soc_dummy
+#+isolement_dummy+difpayer_dummy
+#sante~age1_dummy+age2_dummy+age3_dummy+age4_dummy+homme_dummy+etude2_dummy+fum2_dummy+verre2_dummy+couple_d#ummy+avenir_dummy+risque_dummy
 #etude2_dummy~age1_dummy+age2_dummy+age3_dummy+age4_dummy+homme_dummy+verre2_dummy
 
 #correlations residuals
@@ -423,156 +312,34 @@ etatsante_dummy~~etatsante_score
 
 '
 
-sem2<-sem(sem.model2,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dummy",
+cfa4<-sem(cfa.model4,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dummy",
                      "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
                      "csp1_dummy","csp2_dummy","csp3_dummy",
                      "etude1_dummy",
                      "renonc_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
                      "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
                      "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy"))
-summary(sem2,fit.measures=TRUE, standardized=TRUE)
-
-mi = modificationIndices(sem2)
-head(mi[order(-mi$mi), ], 10)
+summary(cfa4,fit.measures=TRUE, standardized=TRUE)
 ```
 
-```{r}
-#Regression model
-#Model 3
-sem.model3<-'
-
-#measurement model
-renonc=~ renonc_cons_dummy+
-    renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
-sante=~etatsante_dummy+etatsante_score+pbpathol_dummy+frag2_dummy
-
-#regression
-renonc~sante+etude2_dummy+risque_dummy+soc_dummy+fum2_dummy+verre2_dummy+avenir_dummy+isolement_dummy+cc_dummy+difpayer_dummy+pole1_dummy+pole2_dummy+homme_dummy
-sante~renonc+age1_dummy+age2_dummy+age3_dummy+age4_dummy+homme_dummy+etude2_dummy
-cc_dummy~difpayer_dummy+isolement_dummy
-
-
-#correlations residuals
-etatsante_dummy~~etatsante_score
-pbpathol_dummy~~frag2_dummy
-#renonc_cons_dummy~~etude2_dummy
-
-
-
-
-'
-
-sem3<-sem(sem.model3,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dummy",
-                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
-                     "csp1_dummy","csp2_dummy","csp3_dummy",
-                     "etude1_dummy",
-                     "renonc_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
-                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
-                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy","cc_dummy"))
-summary(sem3,fit.measures=TRUE, standardized=TRUE)
-
-inspect(sem3,"std")
-
-mi = modificationIndices(sem3)
-head(mi[order(-mi$mi), ], 10)
-```
-
-```{r}
-#Regression model
-#Model 4
-sem.model4<-'
-
-#measurement model
-renonc=~ renonc_cons_dummy+
-    renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
-sante=~etatsante_dummy+etatsante_score+pbpathol_dummy+frag2_dummy
-
-#regression
-renonc~sante+etude2_dummy+risque_dummy+soc_dummy+fum2_dummy+verre2_dummy+avenir_dummy+isolement_dummy+cc_dummy+difpayer_dummy+pole1_dummy+pole2_dummy+homme_dummy+couple_dummy
-sante~renonc+age1_dummy+age2_dummy+age3_dummy+age4_dummy+homme_dummy+etude2_dummy+fum2_dummy+verre2_dummy+couple_dummy
-cc_dummy~difpayer_dummy+isolement_dummy
-
-
-#correlations residuals
-etatsante_dummy~~etatsante_score
-pbpathol_dummy~~frag2_dummy
-renonc_long_dummy~~cc_dummy
-
-
-
-
-'
-
-sem4=sem(sem.model4,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dummy",
-                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
-                     "csp1_dummy","csp2_dummy","csp3_dummy",
-                     "etude1_dummy",
-                     "renonc_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
-                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
-                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy","cc_dummy"))
-summary(sem4,fit.measures=TRUE, standardized=TRUE)
-
-inspect(sem3,"std")
-
-mi = modificationIndices(sem3)
-head(mi[order(-mi$mi), ], 10)
-```
-
-```{r}
-#Model 5
-sem.model5<-'
-
-#measurement model
-renonc=~ renonc_cons_dummy+
-    renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
-sante=~etatsante_dummy+etatsante_score+pbpathol_dummy+frag2_dummy
-
-#regression
-renonc~sante+soc_dummy+verre2_dummy+isolement_dummy+cc_dummy+difpayer_dummy+homme_dummy
-sante~renonc+age2_dummy+age3_dummy+age4_dummy+etude2_dummy
-cc_dummy~difpayer_dummy+isolement_dummy+homme_dummy
-
-
-
-#correlations residuals
-etatsante_dummy~~etatsante_score
-pbpathol_dummy~~frag2_dummy
-renonc_long_dummy~~cc_dummy
-
-
-
-
-'
-
-sem5=sem(sem.model5,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dummy",
-                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
-                     "csp1_dummy","csp2_dummy","csp3_dummy",
-                     "etude1_dummy",
-                     "renonc_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
-                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
-                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy","cc_dummy"))
-summary(sem5,fit.measures=TRUE, standardized=TRUE)
-
-inspect(sem5,"std")
-
-mi = modificationIndices(sem5)
-head(mi[order(-mi$mi), ], 10)
-```
 
 ```{r,fig.height=12,fig.width=12}
 #Model 6
+#Best model#
 sem.model6<-'
 
 #measurement model
 renonc=~ renonc_cons_dummy+
     renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
-sante=~etatsante_dummy+etatsante_score+pbpathol_dummy+frag2_dummy+renonc_cons_dummy
+sante=~etatsante_dummy+etatsante_score+pbpathol_dummy+frag2_dummy
 
 #regression
-renonc~sante+soc_dummy+verre2_dummy+isolement_dummy+cc_dummy+difpayer_dummy+homme_dummy
-sante~renonc+age2_dummy+age3_dummy+age4_dummy+etude2_dummy
-cc_dummy~difpayer_dummy+isolement_dummy+homme_dummy
-LOGDEP~sante+cc_dummy+etude2_dummy+renonc+age4_dummy
+renonc~sante+soc_dummy+verre2_dummy+isolement_dummy+cc_dummy+difpayer_dummy+homme_dummy+revenu_dummy+etude2_dummy
+sante~renonc+ageclass_dummy
+cc_dummy~difpayer_dummy+isolement_dummy+homme_dummy+revenu_dummy
+LOGDEP~sante+cc_dummy+renonc
+revenu_dummy~etude2_dummy+ageclass_dummy
+difpayer_dummy~revenu_dummy
 
 
 
@@ -589,11 +356,305 @@ sem6=sem(sem.model6,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dum
                      "etude1_dummy",
                      "renonc_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
                      "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
-                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy","cc_dummy"))
+                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy","cc_dummy","revenu_dummy",
+                     "difpayer_dummy"))
 summary(sem6,fit.measures=TRUE, standardized=TRUE)
 
-library(semPlot)
-semPaths(sem6, intercept = FALSE, whatLabel = "est",
-         residuals = FALSE, exoCov = FALSE)
+#mi = modificationIndices(sem6)
+#head(mi[order(-mi$mi), ], 10)
+
 ```
+
+```{r}
+#Model 7
+sem.model7<-'
+
+#measurement model
+renonc=~ renonc_cons_dummy+
+    renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
+sante=~etatsante_dummy+etatsante_score+pbpathol_dummy+frag2_dummy
+
+#regression
+renonc~soc_dummy+verre2_dummy+isolement_dummy+cc_dummy+difpayer_dummy+homme_dummy+revenu_dummy+etude2_dummy
+sante~renonc+ageclass_dummy
+cc_dummy~difpayer_dummy+isolement_dummy+homme_dummy+revenu_dummy
+LOGDEP~sante+cc_dummy+renonc
+revenu_dummy~etude2_dummy+ageclass_dummy
+difpayer_dummy~revenu_dummy
+
+
+
+#correlations residuals
+etatsante_dummy~~etatsante_score
+#renonc_long_dummy~~cc_dummy
+#LOGDEP~~frag2_dummy
+pbpathol_dummy ~~ frag2_dummy
+'
+
+sem7=sem(sem.model7,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dummy",
+                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
+                     "csp1_dummy","csp2_dummy","csp3_dummy",
+                     "etude1_dummy",
+                     "renonc_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
+                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
+                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy","cc_dummy","revenu_dummy",
+                     "difpayer_dummy"))
+summary(sem7,fit.measures=TRUE, standardized=TRUE)
+
+#mi = modificationIndices(sem6)
+#head(mi[order(-mi$mi), ], 10)
+```
+
+```{r}
+#Model 8
+#Model 7
+sem.model8<-'
+
+#measurement model
+renonc=~ renonc_cons_dummy+
+    renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
+sante=~etatsante_dummy+etatsante_score+pbpathol_dummy+frag2_dummy
+
+#regression
+renonc~sante+soc_dummy+verre2_dummy+isolement_dummy+cc_dummy+difpayer_dummy+homme_dummy+revenu_dummy+etude2_dummy
+sante~ageclass_dummy
+cc_dummy~difpayer_dummy+isolement_dummy+homme_dummy+revenu_dummy
+LOGDEP~sante+cc_dummy+renonc
+revenu_dummy~etude2_dummy+ageclass_dummy
+difpayer_dummy~revenu_dummy
+
+
+
+#correlations residuals
+etatsante_dummy~~etatsante_score
+#renonc_long_dummy~~cc_dummy
+#LOGDEP~~frag2_dummy
+pbpathol_dummy ~~ frag2_dummy
+'
+
+sem8=sem(sem.model8,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dummy",
+                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
+                     "csp1_dummy","csp2_dummy","csp3_dummy",
+                     "etude1_dummy",
+                     "renonc_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
+                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
+                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy","cc_dummy","revenu_dummy",
+                     "difpayer_dummy"))
+summary(sem8,fit.measures=TRUE, standardized=TRUE)
+anova(sem6,sem8)
+```
+
+```{r}
+#Model 9 (Number of pathologies as observed variable)
+sem.model9<-'
+
+#measurement model
+renonc=~ renonc_cons_dummy+
+    renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
+sante=~etatsante_dummy+etatsante_score+frag2_dummy
+
+#regression
+renonc~sante+soc_dummy+verre2_dummy+isolement_dummy+cc_dummy+difpayer_dummy+homme_dummy+revenu_dummy+etude2_dummy
+sante~renonc+ageclass_dummy+pbpathol_dummy
+cc_dummy~difpayer_dummy+isolement_dummy+homme_dummy+revenu_dummy
+LOGDEP~sante+cc_dummy+renonc+pbpathol_dummy
+revenu_dummy~etude2_dummy+ageclass_dummy
+pbpathol_dummy~ageclass_dummy
+difpayer_dummy~revenu_dummy
+
+
+
+#correlations residuals
+etatsante_dummy~~etatsante_score
+#renonc_long_dummy~~cc_dummy
+#LOGDEP~~frag2_dummy
+pbpathol_dummy ~~ frag2_dummy
+'
+
+sem9=sem(sem.model9,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dummy",
+                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
+                     "csp1_dummy","csp2_dummy","csp3_dummy",
+                     "etude1_dummy",
+                     "renonc_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
+                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
+                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy","cc_dummy","revenu_dummy"))
+summary(sem9,fit.measures=TRUE, standardized=TRUE)
+
+mi = modificationIndices(sem6)
+head(mi[order(-mi$mi), ], 10)
+```
+
+```{r}
+#Model 10
+sem.model10<-'
+
+#measurement model
+renonc=~ renonc_cons_dummy+
+    renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
+sante=~etatsante_dummy+etatsante_score+frag2_dummy
+
+#regression
+renonc~sante+soc_dummy+verre2_dummy+isolement_dummy+cc_dummy+difpayer_dummy+homme_dummy+revenu_dummy+etude2_dummy
+sante~renonc+ageclass_dummy+pbpathol_dummy
+cc_dummy~difpayer_dummy+isolement_dummy+homme_dummy+revenu_dummy
+LOGDEP~sante+cc_dummy+renonc+pbpathol_dummy
+revenu_dummy~etude2_dummy+ageclass_dummy
+difpayer_dummy~revenu_dummy
+pbpathol_dummy~ageclass_dummy
+
+
+
+#correlations residuals
+etatsante_dummy~~etatsante_score
+#renonc_long_dummy~~cc_dummy
+#LOGDEP~~frag2_dummy
+#pbpathol_dummy ~~ frag2_dummy
+'
+
+sem10=sem(sem.model10,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dummy",
+                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
+                     "csp1_dummy","csp2_dummy","csp3_dummy",
+                     "etude1_dummy",
+                     "renonc_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
+                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
+                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy","cc_dummy","revenu_dummy",
+                     "difpayer_dummy"))
+summary(sem10,fit.measures=TRUE, standardized=TRUE)
+
+#mi = modificationIndices(sem6)
+#head(mi[order(-mi$mi), ], 10)
+```
+
+```{r}
+#Model 11
+sem.model11<-'
+
+#measurement model
+renonc=~ renonc_cons_dummy+
+    renonc_fin_dummy+renonc_long_dummy+renonc_loin_dummy
+sante=~etatsante_dummy+etatsante_score+pbpathol_dummy+frag2_dummy
+
+#regression
+renonc~sante+soc_dummy+verre2_dummy+isolement_dummy+cc_dummy+difpayer_dummy+homme_dummy+revenu_dummy+etude2_dummy
+sante~renonc+ageclass_dummy
+cc_dummy~difpayer_dummy+isolement_dummy+homme_dummy+revenu_dummy
+LOGDEP~sante+cc_dummy+renonc+couple_dummy
+revenu_dummy~etude2_dummy+couple_dummy
+difpayer_dummy~revenu_dummy+ageclass_dummy
+
+
+
+#correlations residuals
+etatsante_dummy~~etatsante_score
+#renonc_long_dummy~~cc_dummy
+#LOGDEP~~frag2_dummy
+#pbpathol_dummy ~~ frag2_dummy
+'
+
+sem11=sem(sem.model11,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dummy",
+                     "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
+                     "csp1_dummy","csp2_dummy","csp3_dummy",
+                     "etude1_dummy",
+                     "renonc_dummy","renonc_dummy","csp1_dummy2","csp2_dummy2",
+                     "fum_dummy2","renonc_dent_dummy","renonc_lunet_dummy","renonc_cons_dummy",
+                     "renonc_fin_dummy","renonc_long_dummy","renonc_loin_dummy","cc_dummy","revenu_dummy",
+                     "difpayer_dummy"))
+summary(sem11,fit.measures=TRUE, standardized=TRUE)
+
+#mi = modificationIndices(sem11)
+#head(mi[order(-mi$mi), ], 10)
+```
+
+
+```{r,fig.height=12,fig.width=12}
+#Importing packages#
+library("DiagrammeR")
+library("stringr")
+
+#Model graph
+paths <- sem11 %>%
+  parameterestimates %>%
+  select(lhs, op, rhs, est)
+
+# Latent variables are left-hand side of "=~" lines
+latent <- paths %>%
+  filter(op == "=~") %>%
+  select(nodes = lhs) %>%
+  distinct %>%
+  mutate(shape = "circle")
+
+# Manifest variables are not latent variables
+`%not_in%` <- Negate(`%in%`)
+manifest <- sem11 %>%
+  parameterestimates %>% 
+  filter(op != "~1", lhs %not_in% latent$nodes) %>%
+  select(nodes = lhs) %>%
+  distinct %>%
+  mutate(shape = "square")
+
+# Nodes are prepared
+node_set=latent %>% 
+  bind_rows(manifest)
+
+#node_set <- combine_ndfs(latent, manifest)
+#node_set
+
+uniquenodes=node_set %>% 
+  select(nodes) %>% 
+  pull %>% 
+  unique
+
+#edges
+all_paths <- sem11 %>%
+  parameterestimates %>% 
+  filter(op != "~1") %>%
+  mutate(label = round(est, 2)) %>%
+  select(-est)
+
+# Factor loadings are the paths in the "=~" lines
+loadings <- all_paths %>%
+  filter(op == "=~") %>%
+  mutate(edge_from = lhs, edge_to = rhs, style = "dashed") %>%
+  select(edge_from, edge_to, style, label)
+
+# Regressions are the paths in the "~" lines
+regressions <- all_paths %>%
+  filter(op == "~") %>%
+  rename(edge_to = lhs, edge_from = rhs) %>%
+  mutate(style = "solid") %>%
+  select(edge_from, edge_to, style, label)
+
+edge_set=loadings %>%
+  bind_rows(regressions)
+#edge_set <- combine_edfs(loadings, regressions)
+
+nodes <- create_node_df(n=length(uniquenodes), 
+         type="number", 
+         label=uniquenodes,
+         shape=node_set$shape) 
+
+edges <- create_edge_df(from=match(edge_set$edge_from, uniquenodes), 
+         to=match(edge_set$edge_to, uniquenodes), 
+         rel="leading_to",
+         label=edge_set$label) 
+
+# Combine edges and nodes
+library(magrittr)
+my_graph <- create_graph(
+  nodes_df = nodes,
+  edges_df = edges) %>% 
+  add_global_graph_attrs(
+    attr = "fontsize",
+    value = 10,
+    attr_type = "edge")
+# We can plot the graph directly
+render_graph(my_graph) 
+
+#g <- create_graph(nodes_df=nodes, edges_df=edges)
+#get_global_graph_attrs(g)
+
+```
+
+
+
 
