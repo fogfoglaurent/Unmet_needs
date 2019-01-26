@@ -277,7 +277,7 @@ etatsante_dummy~~etatsante_score
 
 '
 
-cfa3<-sem(sem.model1,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dummy",
+cfa3<-sem(cfa.model3,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_dummy",
                      "adl2_dummy","frag1_dummy","frag2_dummy","pbpathol_dummy",
                      "csp1_dummy","csp2_dummy","csp3_dummy",
                      "etude1_dummy",
@@ -570,11 +570,12 @@ summary(sem11,fit.measures=TRUE, standardized=TRUE)
 #Importing packages#
 library("DiagrammeR")
 library("stringr")
+library(devEMF)
 
 #Model graph
 paths <- sem11 %>%
-  parameterestimates %>%
-  select(lhs, op, rhs, est)
+  standardizedSolution %>%
+  select(lhs, op, rhs, est=est.std)
 
 # Latent variables are left-hand side of "=~" lines
 latent <- paths %>%
@@ -586,7 +587,8 @@ latent <- paths %>%
 # Manifest variables are not latent variables
 `%not_in%` <- Negate(`%in%`)
 manifest <- sem11 %>%
-  parameterestimates %>% 
+  standardizedSolution %>% 
+  select(lhs, op, rhs, est=est.std) %>% 
   filter(op != "~1", lhs %not_in% latent$nodes) %>%
   select(nodes = lhs) %>%
   distinct %>%
@@ -604,9 +606,15 @@ uniquenodes=node_set %>%
   pull %>% 
   unique
 
+nodes_label=c("Unmet \nneeds","Health","Complementary \n insurance","Healthcare \nexpenditures",
+              "Low income","Financial \n difficulties","Self-perceived \nhealth #1","Consultation","Financial \nreason",
+              "Delay","Distance","Number of \npathologies","Frailty","Self-perceived \nhealth #2","Social life",
+              "Drinking","Experience of\n seclusion","Gender","Education","Age","Married")
+
 #edges
 all_paths <- sem11 %>%
-  parameterestimates %>% 
+  standardizedSolution %>% 
+  select(lhs, op, rhs, est=est.std) %>% 
   filter(op != "~1") %>%
   mutate(label = round(est, 2)) %>%
   select(-est)
@@ -622,6 +630,15 @@ regressions <- all_paths %>%
   filter(op == "~") %>%
   rename(edge_to = lhs, edge_from = rhs) %>%
   mutate(style = "solid") %>%
+  select(edge_from, edge_to, style, label) %>% 
+  mutate(dir="forward")
+
+#correlations
+correlations <- all_paths %>%
+  filter(op == "~~") %>%
+  rename(edge_to = lhs, edge_from = rhs) %>%
+  mutate(style = "solid") %>%
+  mutate(dir = "both") %>%
   select(edge_from, edge_to, style, label)
 
 edge_set=loadings %>%
@@ -630,29 +647,139 @@ edge_set=loadings %>%
 
 nodes <- create_node_df(n=length(uniquenodes), 
          type="number", 
-         label=uniquenodes,
+         label=nodes_label,
          shape=node_set$shape) 
 
 edges <- create_edge_df(from=match(edge_set$edge_from, uniquenodes), 
          to=match(edge_set$edge_to, uniquenodes), 
          rel="leading_to",
-         label=edge_set$label) 
+         label=edge_set$label,
+         style=edge_set$style,
+         dir=edge_set$dir) 
 
 # Combine edges and nodes
 library(magrittr)
 my_graph <- create_graph(
   nodes_df = nodes,
   edges_df = edges) %>% 
-  add_global_graph_attrs(
-    attr = "fontsize",
-    value = 10,
-    attr_type = "edge")
+   add_global_graph_attrs(
+      attr = c("layout", "rankdir", "splines","nodesep","fontsize","height"),
+      value = c("dot", "LR", "true",0.25,10,0.9),
+      attr_type = c("graph", "graph", "graph","graph","edge","node"))
 # We can plot the graph directly
 render_graph(my_graph) 
 
 #g <- create_graph(nodes_df=nodes, edges_df=edges)
 #get_global_graph_attrs(g)
+emf(file = "sem.emf", width = 10, height = 10)
+render_graph(my_graph) 
+dev.off()
 
+```
+
+```{r}
+#CFA graph
+#Model graph
+paths <- cfa3 %>%
+  standardizedSolution %>%
+  select(lhs, op, rhs, est=est.std)
+
+# Latent variables are left-hand side of "=~" lines
+latent <- paths %>%
+  filter(op == "=~") %>%
+  select(nodes = lhs) %>%
+  distinct %>%
+  mutate(shape = "circle")
+
+# Manifest variables are not latent variables
+`%not_in%` <- Negate(`%in%`)
+manifest <- cfa3 %>%
+  standardizedSolution %>% 
+  select(lhs, op, rhs, est=est.std) %>% 
+  filter(op != "~1", lhs %not_in% latent$nodes) %>%
+  select(nodes = lhs) %>%
+  distinct %>%
+  mutate(shape = "square")
+
+# Nodes are prepared
+node_set=latent %>% 
+  bind_rows(manifest)
+
+#node_set <- combine_ndfs(latent, manifest)
+#node_set
+
+uniquenodes=node_set %>% 
+  select(nodes) %>% 
+  pull %>% 
+  unique
+
+nodes_label=c("Unmet \nneeds","Health","Self-perceived \nhealth #1","Consultation","Financial \nreason",
+              "Delay","Distance","Number of \npathologies","Frailty","Self-perceived \nhealth #2")
+
+#edges
+all_paths <- cfa3 %>%
+  standardizedSolution %>% 
+  select(lhs, op, rhs, est=est.std) %>% 
+  filter(op != "~1") %>%
+  mutate(label = round(est, 2)) %>%
+  select(-est)
+
+# Factor loadings are the paths in the "=~" lines
+loadings <- all_paths %>%
+  filter(op == "=~") %>%
+  mutate(edge_from = lhs, edge_to = rhs, style = "dashed") %>%
+  select(edge_from, edge_to, style, label)
+
+# Regressions are the paths in the "~" lines
+regressions <- all_paths %>%
+  filter(op == "~") %>%
+  rename(edge_to = lhs, edge_from = rhs) %>%
+  mutate(style = "solid") %>%
+  select(edge_from, edge_to, style, label) %>% 
+  mutate(dir="forward")
+
+#correlations
+correlations <- all_paths %>%
+  filter(op == "~~") %>%
+  rename(edge_to = lhs, edge_from = rhs) %>%
+  mutate(style = "solid") %>%
+  mutate(dir = "both") %>%
+  select(edge_from, edge_to, style, label,dir)
+
+edge_set=loadings %>%
+  bind_rows(regressions) %>% 
+  bind_rows(correlations)
+#edge_set <- combine_edfs(loadings, regressions)
+
+nodes <- create_node_df(n=length(uniquenodes), 
+         type="number", 
+         label=nodes_label,
+         shape=node_set$shape) 
+
+edges <- create_edge_df(from=match(edge_set$edge_from, uniquenodes), 
+         to=match(edge_set$edge_to, uniquenodes), 
+         rel="leading_to",
+         label=edge_set$label,
+         style=edge_set$style,
+         dir=edge_set$dir) 
+
+# Combine edges and nodes
+library(magrittr)
+my_graph <- create_graph(
+  nodes_df = nodes,
+  edges_df = edges) %>% 
+   add_global_graph_attrs(
+      attr = c("layout", "rankdir", "splines","nodesep","fontsize","height"),
+      value = c("dot", "LR", "true",0.25,10,0.9),
+      attr_type = c("graph", "graph", "graph","graph","edge","node"))
+# We can plot the graph directly
+render_graph(my_graph) 
+
+#g <- create_graph(nodes_df=nodes, edges_df=edges)
+#get_global_graph_attrs(g)
+emf(file = "cfa.emf", width = 6, height = 10)
+render_graph(my_graph) 
+dev.off()
 ```
 
 
