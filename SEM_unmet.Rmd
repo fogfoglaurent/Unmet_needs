@@ -4,7 +4,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE,warning=FALSE,message=FALSE)
 ```
 
 ```{r}
@@ -213,6 +213,7 @@ testdata=modeldata_sg5 %>%
   
 ```
 
+#Associations
 
 ```{r,fig.height=12,fig.width=12}
 ##Calculation of correlations between variables##
@@ -249,6 +250,21 @@ corrplot(cramer,type="upper",tl.srt=45,tl.col="black",diag=F,addCoef.col="black"
 par(old)
 
 ```
+
+```{r,eval=FALSE}
+#EFA
+library(psych)
+data=testdata %>% 
+  select(renonc_cons_dummy,renonc_fin_dummy,renonc_long_dummy,renonc_loin_dummy,
+         etatsante_dummy,etatsante_score,pbpathol_dummy,frag2_dummy) 
+
+f1 <- fa(data, nfactors=2, fm="ml",rotate="varimax",cor="mixed")
+print(f1)
+f1$Str
+```
+
+
+#CFA model
 
 ```{r}
 
@@ -287,7 +303,7 @@ cfa3<-sem(cfa.model3,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_du
 summary(cfa3,fit.measures=TRUE, standardized=TRUE)
 ```
 
-```{r}
+```{r,eval=FALSE}
 #CFA model
 #Model 4
 cfa.model4<-'
@@ -322,8 +338,9 @@ cfa4<-sem(cfa.model4,data=testdata,std.lv=T,ordered=c("etatsante_dummy","adl1_du
 summary(cfa4,fit.measures=TRUE, standardized=TRUE)
 ```
 
+#SEM model
 
-```{r,fig.height=12,fig.width=12}
+```{r,fig.height=12,fig.width=12,eval=FALSE}
 #Model 6
 #Best model#
 sem.model6<-'
@@ -365,7 +382,7 @@ summary(sem6,fit.measures=TRUE, standardized=TRUE)
 
 ```
 
-```{r}
+```{r,eval=FALSE}
 #Model 7
 sem.model7<-'
 
@@ -405,7 +422,7 @@ summary(sem7,fit.measures=TRUE, standardized=TRUE)
 #head(mi[order(-mi$mi), ], 10)
 ```
 
-```{r}
+```{r,eval=FALSE}
 #Model 8
 #Model 7
 sem.model8<-'
@@ -444,7 +461,7 @@ summary(sem8,fit.measures=TRUE, standardized=TRUE)
 anova(sem6,sem8)
 ```
 
-```{r}
+```{r,eval=FALSE}
 #Model 9 (Number of pathologies as observed variable)
 sem.model9<-'
 
@@ -484,7 +501,7 @@ mi = modificationIndices(sem6)
 head(mi[order(-mi$mi), ], 10)
 ```
 
-```{r}
+```{r,eval=FALSE}
 #Model 10
 sem.model10<-'
 
@@ -565,8 +582,9 @@ summary(sem11,fit.measures=TRUE, standardized=TRUE)
 #head(mi[order(-mi$mi), ], 10)
 ```
 
+#SEM graph
 
-```{r,fig.height=12,fig.width=12}
+```{r,fig.height=8,fig.width=8}
 #Importing packages#
 library("DiagrammeR")
 library("stringr")
@@ -667,17 +685,16 @@ my_graph <- create_graph(
       value = c("dot", "LR", "true",0.25,10,0.9),
       attr_type = c("graph", "graph", "graph","graph","edge","node"))
 # We can plot the graph directly
-render_graph(my_graph) 
+render_graph(my_graph)
 
 #g <- create_graph(nodes_df=nodes, edges_df=edges)
 #get_global_graph_attrs(g)
-emf(file = "sem.emf", width = 10, height = 10)
-render_graph(my_graph) 
-dev.off()
 
 ```
 
-```{r}
+#CFA graph
+
+```{r,fig.height=6.5,fig.width=6.5}
 #CFA graph
 #Model graph
 paths <- cfa3 %>%
@@ -777,9 +794,6 @@ render_graph(my_graph)
 
 #g <- create_graph(nodes_df=nodes, edges_df=edges)
 #get_global_graph_attrs(g)
-emf(file = "cfa.emf", width = 6, height = 10)
-render_graph(my_graph) 
-dev.off()
 ```
 
 
